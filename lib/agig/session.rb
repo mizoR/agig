@@ -58,9 +58,16 @@ class Agig::Session < Net::IRC::Server::Session
             updated_at = Time.parse(entry.updated_at).utc
             next if updated_at <= @notification_last_retrieved
 
-            reachable_url = reachable_url_for(entry.subject.latest_comment_url)
+            reachable_url, options = reachable_url_for(entry.subject.latest_comment_url)
 
-            post entry.repository.owner.login, PRIVMSG, "#notification", "\0035#{entry.subject.title}\017 \00314#{reachable_url}\017"
+            post '---', PRIVMSG, "#notification", ""
+            post entry.repository.owner.login, PRIVMSG, "#notification", "\x02#{entry.subject.title}\017 - \00314#{reachable_url}\017"
+            if options && options['body']
+              options['body'].each_line do |line|
+                next if line.chomp == ''
+                post entry.repository.owner.login, PRIVMSG, "#notification", "\x16#{line}\017"
+              end
+            end
             @notification_last_retrieved = updated_at
           end
 
@@ -93,12 +100,15 @@ class Agig::Session < Net::IRC::Server::Session
     if issue_match = latest_comment_url.match(/(?:issues|pulls)\/(\d+?)$/)
       issue_id = issue_match[1]
       latest_comment = client.issue_comments(repos_owner, issue_id).last
-      latest_comment ?
-        latest_comment['html_url'] :
+      if latest_comment
+        [latest_comment['html_url'], {'body' => latest_comment['body']}]
+      else
         latest_comment_url.sub(/api\./, '').sub(/repos\//, '').sub(/pulls\//, 'pull/')
+      end
     elsif comment_match = latest_comment_url.match(/comments\/(\d+?)$/)
       comment_id = comment_match[1]
-      client.issue_comment(repos_owner, comment_id)['html_url']
+      issue_comment = client.issue_comment(repos_owner, comment_id)
+      [issue_comment['html_url'], {'body' => issue_comment['body']}]
     else
       nil
     end
