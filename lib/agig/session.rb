@@ -13,12 +13,12 @@ class Agig::Session < Net::IRC::Server::Session
   end
 
   def channels
-    ['#notification', '#watch']
+    ['#notification']
   end
 
   def initialize(*args)
     super
-    @notification_last_retrieved = @watch_last_retrieved = Time.now.utc - 3600
+    @notification_last_retrieved = Time.now.utc - 3600
   end
 
   def client
@@ -62,17 +62,6 @@ class Agig::Session < Net::IRC::Server::Session
 
             post notification.repository.owner.login, PRIVMSG, "#notification", "\0035#{notification.subject.title}\017 \00314#{reachable_url}\017"
             @notification_last_retrieved = updated_at
-          end
-
-          events = client.received_events(@nick)
-          events.sort_by(&:created_at).reverse_each do |event|
-            next if event.type != "WatchEvent"
-
-            created_at = Time.parse(event.created_at).utc
-            next if created_at <= @watch_last_retrieved
-
-            post event.actor.login, PRIVMSG, "#watch", "\0035#{event.payload.action}\017 \00314http://github.com/#{event.repo.name}\017"
-            @watch_last_retrieved = created_at
           end
 
           @log.info 'sleep'
