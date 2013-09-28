@@ -54,13 +54,29 @@ class Agig::Session < Net::IRC::Server::Session
           @log.info 'retrieveing feed...'
 
           notifications = client.notifications(all: true)
-          notifications.sort_by(&:updated_at).reverse_each do |notification|
-            updated_at = Time.parse(notification.updated_at).utc
+          notifications = notifications.sort {|a, b| a[:updated_at] <=> b[:updated_at]}
+          notifications.each do |notification|
+            updated_at = notification[:updated_at]
             next if updated_at <= @notification_last_retrieved
 
-            reachable_url = reachable_url_for(notification.subject.latest_comment_url)
+            subject        = notification[:subject]
+            repository     = notification[:repository]
+            latest_comment = subject.rels[:latest_comment].get.data
+            issue_id       = latest_comment[:number] || begin
+              issue = (issue = latest_comment.rels[:issue]) && issue.get.data
+              issue && issue[:number]
+            end
+            if issue_id
+              reachable_url =  "https://github.com/#{repository[:full_name]}/issues/#{issue_id}"
+              reachable_url << "#issuecomment-#{latest_comment[:id]}"
+            end
 
-            post notification.repository.owner.login, PRIVMSG, "#notification", "\0035#{notification.subject.title}\017 \00314#{reachable_url}\017"
+            post notification[:repository][:owner][:login], PRIVMSG, "#notification", "\0035#{subject[:title]}\017 \00314#{reachable_url}\017"
+            latest_comment[:body].each_line do |line|
+              next if line.chomp =~ /^[ 　\t\r\n]*$/
+              post notification[:repository][:owner][:login], PRIVMSG, "#notification", line
+            end
+            post '---', PRIVMSG, "#notification", '-' * 50
             @notification_last_retrieved = updated_at
           end
 
@@ -74,22 +90,6 @@ class Agig::Session < Net::IRC::Server::Session
           sleep 10
         end
       end
-    end
-  end
-
-  def reachable_url_for(latest_comment_url)
-    repos_owner = latest_comment_url.match(/repos\/(.+?\/.+?)\//)[1]
-    if issue_match = latest_comment_url.match(/(?:issues|pulls)\/(\d+?)$/)
-      issue_id = issue_match[1]
-      latest_comment = client.issue_comments(repos_owner, issue_id).last
-      latest_comment ?
-        latest_comment['html_url'] :
-        latest_comment_url.sub(/api\./, '').sub(/repos\//, '').sub(/pulls\//, 'pull/')
-    elsif comment_match = latest_comment_url.match(/comments\/(\d+?)$/)
-      comment_id = comment_match[1]
-      client.issue_comment(repos_owner, comment_id)['html_url']
-    else
-      nil
     end
   end
 end
