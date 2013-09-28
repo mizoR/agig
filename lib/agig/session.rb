@@ -53,14 +53,14 @@ class Agig::Session < Net::IRC::Server::Session
         begin
           @log.info 'retrieveing feed...'
 
-          entries = client.notifications(all: true)
-          entries.sort_by(&:updated_at).reverse_each do |entry|
-            updated_at = Time.parse(entry.updated_at).utc
+          notifications = client.notifications(all: true)
+          notifications.sort_by(&:updated_at).reverse_each do |notification|
+            updated_at = Time.parse(notification.updated_at).utc
             next if updated_at <= @notification_last_retrieved
 
-            reachable_url = reachable_url_for(entry.subject.latest_comment_url)
+            reachable_url = reachable_url_for(notification.subject.latest_comment_url)
 
-            post entry.repository.owner.login, PRIVMSG, "#notification", "\0035#{entry.subject.title}\017 \00314#{reachable_url}\017"
+            post notification.repository.owner.login, PRIVMSG, "#notification", "\0035#{notification.subject.title}\017 \00314#{reachable_url}\017"
             @notification_last_retrieved = updated_at
           end
 
