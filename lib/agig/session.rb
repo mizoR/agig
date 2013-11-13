@@ -83,13 +83,13 @@ class Agig::Session < Net::IRC::Server::Session
           end
 
           @log.info 'sleep'
-          sleep 30
+          sleep 30 * 10
         rescue Exception => e
           @log.error e.inspect
           e.backtrace.each do |l|
             @log.error "\t#{l}"
           end
-          sleep 10
+          sleep 10 * 10
         end
       end
     end
